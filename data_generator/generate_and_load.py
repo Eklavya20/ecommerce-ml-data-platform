@@ -42,7 +42,7 @@ def sizes(scale: int) -> DatasetSizes:
 
 def connection_string() -> str:
     return (
-        f"host={os.getenv('DB_HOST', 'localhost')} "
+        f"host={os.getenv('DB_HOST', '127.0.0.1')} "
         f"port={os.getenv('POSTGRES_PORT', '5432')} "
         f"dbname={os.getenv('POSTGRES_DB', 'ecommerce')} "
         f"user={os.getenv('POSTGRES_USER', 'ecommerce')} "
@@ -80,7 +80,10 @@ def baseline_records(seed: int, scale: int, loaded_at: datetime) -> dict[str, li
 
     customers: list[tuple[Any, ...]] = []
     for customer_id in range(1, n.customers + 1):
-        created_at = BUSINESS_START + timedelta(days=customer_id)
+        if scale > 1:
+            created_at = BUSINESS_START - timedelta(days=1 + customer_id % 365)
+        else:
+            created_at = BUSINESS_START + timedelta(days=customer_id)
         customers.append(
             (
                 customer_id,
@@ -123,6 +126,7 @@ def baseline_records(seed: int, scale: int, loaded_at: datetime) -> dict[str, li
     next_item_id = 1
     next_payment_id = 1
     next_return_id = 1
+    customer_by_order: dict[int, int] = {}
 
     for order_id in range(1, n.orders + 1):
         ordered_at = BUSINESS_START + timedelta(days=20 + order_id, hours=order_id % 8)
@@ -134,7 +138,14 @@ def baseline_records(seed: int, scale: int, loaded_at: datetime) -> dict[str, li
             status = "paid"
         else:
             status = "completed"
-        customer_id = ((order_id * 7 + seed) % n.customers) + 1
+        default_customer_id = ((order_id * 7 + seed) % n.customers) + 1
+        if scale > 1 and order_id > 14 and order_id % 4 == 0:
+            # Give a non-trivial subset of customers another order two weeks
+            # later while leaving many customers as one-time purchasers.
+            customer_id = customer_by_order[order_id - 14]
+        else:
+            customer_id = default_customer_id
+        customer_by_order[order_id] = customer_id
         order_updated_at = ordered_at + timedelta(hours=2)
         orders.append(
             (
@@ -157,6 +168,8 @@ def baseline_records(seed: int, scale: int, loaded_at: datetime) -> dict[str, li
         for line_number in range(line_count):
             product_id = ((order_id + line_number + seed) % n.products) + 1
             quantity = 3 if order_id == 1 else rng.randint(1, 3)
+            if scale > 1 and line_number == 0 and order_id % 14 == 0:
+                quantity = max(quantity, 2)
             unit_price = product_prices[product_id][0]
             gross = money(unit_price * quantity)
             discount = money(gross * Decimal("0.10")) if (order_id + line_number) % 5 == 0 else money(0)
@@ -186,11 +199,27 @@ def baseline_records(seed: int, scale: int, loaded_at: datetime) -> dict[str, li
             payment_status = "failed"
         else:
             payment_status = "succeeded"
+        payment_method = PAYMENT_METHODS[(order_id + seed) % len(PAYMENT_METHODS)]
+        if scale > 1 and payment_status == "succeeded" and order_id % 9 == 0:
+            payments.append(
+                (
+                    next_payment_id,
+                    order_id,
+                    payment_method,
+                    "failed",
+                    order_totals[order_id],
+                    attempted_at,
+                    attempted_at,
+                    loaded_at,
+                )
+            )
+            next_payment_id += 1
+            attempted_at += timedelta(minutes=10)
         payments.append(
             (
                 next_payment_id,
                 order_id,
-                PAYMENT_METHODS[(order_id + seed) % len(PAYMENT_METHODS)],
+                payment_method,
                 payment_status,
                 order_totals[order_id],
                 attempted_at,
@@ -220,6 +249,21 @@ def baseline_records(seed: int, scale: int, loaded_at: datetime) -> dict[str, li
                 )
             )
             next_return_id += 1
+            if scale > 1 and order_id % 14 == 0 and quantity >= 2:
+                second_return_at = returned_at + timedelta(days=3)
+                returns.append(
+                    (
+                        next_return_id,
+                        item_ids_for_order[0],
+                        1,
+                        refundable_unit,
+                        RETURN_REASONS[(order_id + 1) % len(RETURN_REASONS)],
+                        second_return_at,
+                        second_return_at,
+                        loaded_at,
+                    )
+                )
+                next_return_id += 1
 
     return {
         "customers": customers,
@@ -493,4 +537,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

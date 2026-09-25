@@ -12,6 +12,9 @@ dbt/target/
 dbt/logs/
 dbt/dbt_packages/
 
+ml/artifacts/*.json
+ml/artifacts/*.joblib
+
 *.log
 .DS_Store
 .idea/

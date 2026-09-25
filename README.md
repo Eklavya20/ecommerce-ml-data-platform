@@ -1,8 +1,8 @@
 # E-commerce Analytics Data Platform
 
-A local analytics engineering project that transforms deterministic synthetic e-commerce transactions into tested PostgreSQL dimensions, facts, and reporting marts with dbt.
+A local analytics and ML data engineering project that transforms deterministic synthetic e-commerce transactions into tested PostgreSQL dimensions, facts, reporting marts, and point-in-time-correct training data with dbt.
 
-Phase 1 demonstrates PostgreSQL, dbt modelling, source freshness, data quality, documentation, late-arriving updates, and idempotent incremental processing. All people, products, orders, and payments are synthetic.
+Phase 1 demonstrates PostgreSQL, dbt modelling, source freshness, data quality, documentation, late-arriving updates, and idempotent incremental processing. Phase 2 adds historical feature snapshots, leakage-safe labels, temporal model evaluation, and a reproducible scikit-learn workflow. All people, products, orders, and payments are synthetic.
 
 ## Business problem
 
@@ -32,6 +32,12 @@ core dimensions + facts
               |
               v
 daily sales + customer 360 marts
+              |
+              v
+historical cutoffs -> point-in-time features -> labelled training dataset
+              |
+              v
+temporal split -> preprocessing -> classifiers -> evaluation artifact
 ```
 
 The critical returns path aggregates events before joining them to order items:
@@ -53,7 +59,9 @@ dbt/models/marts/core/
                       dimensions and facts
 dbt/models/marts/reporting/
                       daily sales and customer 360
-dbt/tests/            one generic and three singular business tests
+dbt/models/marts/ml/  cutoffs, feature snapshots, and training data
+dbt/tests/            generic, business, and leakage tests
+ml/                   PostgreSQL loader, temporal split, training, evaluation
 docker/init/          raw PostgreSQL DDL
 docs/                 architecture and metric definitions
 ```
@@ -94,6 +102,35 @@ dbt build --project-dir dbt --profiles-dir dbt
 ```
 
 The default scale creates a compact dataset suitable for local iteration. Increasing `--scale` multiplies its customer, product, and order counts while preserving deterministic behaviour for a seed.
+
+## Point-in-time ML workflow
+
+The prediction task is `repeat_purchase_30d`: for a customer at a `prediction_cutoff_date`, predict whether at least one paid or completed order with a successful payment occurs in `(cutoff, cutoff + 30 days]`.
+
+Generate the larger deterministic fixture and run the complete workflow:
+
+```bash
+python -m data_generator.generate_and_load --seed 42 --scale 20 --batch baseline
+dbt source freshness --project-dir dbt --profiles-dir dbt
+dbt build --full-refresh --project-dir dbt --profiles-dir dbt
+python -m ml.train
+dbt build --project-dir dbt --profiles-dir dbt
+```
+
+Monthly cutoffs begin only after 90 days of history and are excluded unless the source data contains the entire following 30-day label window. The latest cutoff is the test period, the preceding cutoff is validation, and all earlier cutoffs are training data. This ordering prevents a future period from training a model evaluated on an earlier one.
+
+Feature queries admit only orders and payment attempts dated and last updated on or before the cutoff. Returns are re-aggregated for every cutoff using only events returned and last updated by that date; current, late-arriving refund totals are never reused for a historical snapshot. The target is the only calculation allowed to inspect the following 30 days. Leakage-focused dbt tests enforce the event boundaries and complete observation windows.
+
+Python reads the dbt-produced table from PostgreSQL; it does not duplicate feature logic. Both classifiers use a scikit-learn pipeline whose median imputer and standard scaler are fit on training rows only. The command writes `ml/artifacts/metrics.json`, which is intentionally ignored by Git.
+
+For the seed-42, scale-20 fixture, the training dataset contains 1,349 rows, 183 customers, nine cutoffs, and 118 positive labels (8.75%). The split is May-November 2025 for training, December 2025 for validation, and January 2026 for testing. At a transparent 0.5 threshold, the test results are:
+
+| Model | ROC-AUC | PR-AUC | Precision | Recall | F1 | Confusion matrix `[[TN, FP], [FN, TP]]` |
+|---|---:|---:|---:|---:|---:|---|
+| DummyClassifier | 0.500 | 0.137 | 0.000 | 0.000 | 0.000 | `[[158, 0], [25, 0]]` |
+| LogisticRegression | 0.935 | 0.616 | 0.429 | 0.960 | 0.593 | `[[126, 32], [1, 24]]` |
+
+These synthetic-data metrics demonstrate pipeline behaviour only. They do not establish business value or expected real-world predictive performance.
 
 ## Baseline/delta demonstration
 
@@ -143,6 +180,7 @@ The project includes:
 - A reusable `non_negative` generic test
 - Three business reconciliation tests
 - Exactly two dbt unit tests covering payment retries and a partially returned discounted line
+- ML grain, value-range, non-negative, complete-window, and leakage tests
 
 `dbt build` runs models, data tests, and unit tests in dependency order.
 
@@ -165,5 +203,4 @@ dbt clean --project-dir dbt
 
 ## Current scope
 
-This repository currently implements local PostgreSQL and dbt only. Terraform, AWS, point-in-time ML features, model training, APIs, Kubernetes, and cloud deployment are intentionally reserved for later phases.
-
+This repository implements a local PostgreSQL/dbt platform and a small local scikit-learn workflow. Terraform, AWS, APIs, orchestration platforms, model registries, Kubernetes, and cloud deployment are intentionally reserved for later phases.

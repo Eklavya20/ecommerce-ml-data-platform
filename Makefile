@@ -1,4 +1,4 @@
-.PHONY: up down reset install profile baseline delta debug freshness build docs
+.PHONY: up down reset install profile baseline ml-data delta debug freshness build ml-train docs
 
 up:
 	docker compose up -d
@@ -19,6 +19,9 @@ profile:
 baseline:
 	python -m data_generator.generate_and_load --seed 42 --scale 1 --batch baseline
 
+ml-data:
+	python -m data_generator.generate_and_load --seed 42 --scale 20 --batch baseline
+
 delta:
 	python -m data_generator.generate_and_load --seed 42 --scale 1 --batch delta
 
@@ -31,6 +34,8 @@ freshness:
 build:
 	dbt build --project-dir dbt --profiles-dir dbt
 
+ml-train:
+	python -m ml.train
+
 docs:
 	dbt docs generate --project-dir dbt --profiles-dir dbt
-
