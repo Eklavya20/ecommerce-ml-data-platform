@@ -43,10 +43,10 @@ def sizes(scale: int) -> DatasetSizes:
 def connection_string() -> str:
     return (
         f"host={os.getenv('DB_HOST', '127.0.0.1')} "
-        f"port={os.getenv('POSTGRES_PORT', '5432')} "
-        f"dbname={os.getenv('POSTGRES_DB', 'ecommerce')} "
-        f"user={os.getenv('POSTGRES_USER', 'ecommerce')} "
-        f"password={os.getenv('POSTGRES_PASSWORD', 'ecommerce_local')}"
+        f"port={os.getenv('DB_PORT', '5432')} "
+        f"dbname={os.getenv('DB_NAME', 'ecommerce')} "
+        f"user={os.getenv('DB_USER', 'ecommerce')} "
+        f"password={os.getenv('DB_PASSWORD', 'ecommerce_local')}"
     )
 
 

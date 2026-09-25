@@ -1,0 +1,11 @@
+aws_region = "eu-central-1"
+
+# Replace with your current public IPv4 address and retain the /32 suffix.
+allowed_cidr = "203.0.113.10/32"
+
+db_name     = "ecommerce"
+db_username = "ecommerce"
+
+# Supply this through TF_VAR_db_password or uncomment it only in the ignored
+# terraform.tfvars copy; never commit the real value.
+# db_password = "REPLACE_WITH_A_STRONG_PASSWORD"

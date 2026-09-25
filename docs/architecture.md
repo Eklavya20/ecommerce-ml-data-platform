@@ -1,6 +1,6 @@
 # Architecture
 
-The platform is a local ELT and ML data system. A deterministic Python process writes synthetic transactional records into PostgreSQL's `raw` schema. dbt builds progressively more business-oriented schemas and owns the historical feature and label definitions. Python loads the resulting training table for model fitting and evaluation.
+The platform is an ELT and ML data system that can target either local Docker PostgreSQL or AWS RDS PostgreSQL. A deterministic Python process writes synthetic transactional records into the `raw` schema. dbt builds progressively more business-oriented schemas and owns the historical feature and label definitions. Python loads the resulting training table for model fitting and evaluation.
 
 ```text
 Python generator
@@ -26,6 +26,16 @@ analytics_ml           cutoffs, feature snapshots, labelled data
       v
 temporal split -> train-only preprocessing -> models -> metrics JSON
 ```
+
+Terraform supplies an optional development database without changing the data path:
+
+```text
+bootstrap Terraform -> encrypted/versioned S3 remote state
+development Terraform -> VPC -> two public-route subnets -> /32 security group -> RDS PostgreSQL
+RDS PostgreSQL -> existing raw initialization -> existing generator -> existing dbt + ML workflow
+```
+
+Terraform owns only AWS resource lifecycle. It does not execute DDL, load source data, or create dbt relations. This boundary keeps infrastructure state separate from analytical lineage and lets `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` switch the same code between local and AWS targets.
 
 ## Layer responsibilities
 
@@ -93,4 +103,4 @@ No random split is used. With the seed-42, scale-20 fixture, May through Novembe
 
 ## Scope boundary
 
-This phase is local PostgreSQL, dbt, and scikit-learn only. It does not contain Terraform, AWS resources, APIs, Kubernetes, orchestration platforms, model registries, or cloud deployment.
+The AWS layer is deliberately a temporary development design. Public RDS connectivity is limited to one configured IPv4 `/32`; production should place the database privately and run workloads inside the VPC. The repository does not contain APIs, application deployment, compute clusters, Kubernetes, orchestration platforms, model registries, monitoring stacks, or production HA infrastructure.
