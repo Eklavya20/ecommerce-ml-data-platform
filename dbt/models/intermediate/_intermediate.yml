@@ -1,0 +1,95 @@
+version: 2
+
+models:
+  - name: int_payments_by_order
+    description: "Grain: one row per order with payment activity. Aggregates attempts without counting failed payments as paid revenue."
+    columns:
+      - name: order_id
+        description: Order receiving the payment attempts.
+        data_tests: [unique, not_null]
+      - name: payment_attempt_count
+        data_tests: [non_negative]
+      - name: successful_payment_count
+        data_tests: [non_negative]
+      - name: successful_paid_amount
+        data_tests: [non_negative]
+      - name: latest_payment_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['pending', 'succeeded', 'failed']
+
+  - name: int_returns_by_order_item
+    description: "Grain: exactly one row per returned order item. All return events are aggregated before financial joins to prevent fan-out."
+    columns:
+      - name: order_item_id
+        description: Returned order-item identifier.
+        data_tests: [unique, not_null]
+      - name: returned_quantity
+        data_tests: [non_negative]
+      - name: refund_amount
+        data_tests: [non_negative]
+      - name: return_event_count
+        data_tests: [non_negative]
+
+  - name: int_order_item_financials
+    description: "Grain: exactly one row per order item. Calculates sales, returns, cost and margin after joining pre-aggregated returns."
+    columns:
+      - name: order_item_id
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests: [not_null]
+      - name: product_id
+        data_tests: [not_null]
+      - name: gross_amount
+        data_tests: [non_negative]
+      - name: discount_amount
+        data_tests: [non_negative]
+      - name: net_sales
+        data_tests: [non_negative]
+      - name: refund_amount
+        data_tests: [non_negative]
+      - name: cost
+        data_tests: [non_negative]
+
+  - name: int_orders_enriched
+    description: "Grain: exactly one row per order. Combines line-level financial totals with payment activity and a late-arriving-data watermark."
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests: [not_null]
+      - name: source_updated_at
+        description: Greatest load/update timestamp from the order, its lines/products, payments and returns.
+        data_tests: [not_null]
+
+unit_tests:
+  - name: payment_attempts_only_count_successful_amount
+    description: A failed attempt does not contribute to the successful paid amount.
+    model: int_payments_by_order
+    given:
+      - input: ref('stg_payments')
+        rows:
+          - {payment_id: 1, order_id: 100, payment_method: card, payment_status: failed, amount: 125.00, attempted_at: '2025-01-01 10:00:00+00', updated_at: '2025-01-01 10:00:00+00', source_loaded_at: '2025-01-01 10:01:00+00'}
+          - {payment_id: 2, order_id: 100, payment_method: card, payment_status: succeeded, amount: 125.00, attempted_at: '2025-01-01 10:05:00+00', updated_at: '2025-01-01 10:05:00+00', source_loaded_at: '2025-01-01 10:06:00+00'}
+    expect:
+      rows:
+        - {order_id: 100, payment_attempt_count: 2, successful_payment_count: 1, successful_paid_amount: 125.00, latest_payment_status: succeeded, payment_updated_at: '2025-01-01 10:06:00+00'}
+
+  - name: partially_returned_discounted_order_item
+    description: A discounted two-unit line with one refunded unit produces the expected financial measures.
+    model: int_order_item_financials
+    given:
+      - input: ref('stg_order_items')
+        rows:
+          - {order_item_id: 10, order_id: 20, product_id: 30, quantity: 2, unit_price: 100.00, discount_amount: 20.00, created_at: '2025-01-01 10:00:00+00', updated_at: '2025-01-01 10:00:00+00', source_loaded_at: '2025-01-01 10:01:00+00'}
+      - input: ref('stg_products')
+        rows:
+          - {product_id: 30, unit_cost: 40.00, updated_at: '2025-01-01 09:00:00+00', source_loaded_at: '2025-01-01 09:01:00+00'}
+      - input: ref('int_returns_by_order_item')
+        rows:
+          - {order_item_id: 10, returned_quantity: 1, refund_amount: 90.00, return_event_count: 1, return_updated_at: '2025-01-02 10:00:00+00'}
+    expect:
+      rows:
+        - {order_item_id: 10, gross_amount: 200.00, discount_amount: 20.00, net_sales: 180.00, refund_amount: 90.00, post_refund_revenue: 90.00, cost: 80.00, margin: 10.00}
+

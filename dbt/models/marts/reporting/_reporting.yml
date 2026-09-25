@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: mart_daily_sales
+    description: "Grain: one row per order date and sales channel for paid or completed orders."
+    columns:
+      - name: daily_sales_key
+        description: Deterministic key for the order-date and sales-channel grain.
+        data_tests: [unique, not_null]
+      - name: order_date
+        data_tests: [not_null]
+      - name: sales_channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['web', 'mobile', 'marketplace']
+      - name: order_count
+        data_tests: [non_negative]
+      - name: gross_sales
+        data_tests: [non_negative]
+      - name: discounts
+        data_tests: [non_negative]
+      - name: refunds
+        data_tests: [non_negative]
+
+  - name: mart_customer_360
+    description: "Grain: one row per customer. Current-state customer analytics mart; not a point-in-time ML feature table."
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: total_orders
+        data_tests: [non_negative]
+      - name: total_units
+        data_tests: [non_negative]
+      - name: returned_quantity
+        data_tests: [non_negative]
+      - name: gross_sales
+        data_tests: [non_negative]
+      - name: discounts
+        data_tests: [non_negative]
+      - name: refunds
+        data_tests: [non_negative]

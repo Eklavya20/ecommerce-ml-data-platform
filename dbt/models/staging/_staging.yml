@@ -1,0 +1,83 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: "Grain: one row per customer. Clean, typed customer source data."
+    columns:
+      - name: customer_id
+        description: Stable customer identifier.
+        data_tests: [unique, not_null]
+      - name: email
+        data_tests: [not_null]
+
+  - name: stg_products
+    description: "Grain: one row per product. Clean, typed product catalogue data."
+    columns:
+      - name: product_id
+        description: Stable product identifier.
+        data_tests: [unique, not_null]
+      - name: list_price
+        data_tests: [non_negative]
+      - name: unit_cost
+        data_tests: [non_negative]
+
+  - name: stg_orders
+    description: "Grain: one row per order. Clean, typed order header data."
+    columns:
+      - name: order_id
+        description: Stable order identifier.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+
+  - name: stg_order_items
+    description: "Grain: one row per order item. Clean, typed order-line data."
+    columns:
+      - name: order_item_id
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+  - name: stg_payments
+    description: "Grain: one row per payment attempt."
+    columns:
+      - name: payment_id
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+
+  - name: stg_returns
+    description: "Grain: one row per return event; multiple events may reference one order item."
+    columns:
+      - name: return_id
+        data_tests: [unique, not_null]
+      - name: order_item_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_order_items')
+                field: order_item_id
+

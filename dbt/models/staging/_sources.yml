@@ -1,0 +1,159 @@
+version: 2
+
+sources:
+  - name: ecommerce
+    description: Synthetic transactional data loaded into PostgreSQL by the local generator.
+    schema: raw
+    config:
+      loaded_at_field: _loaded_at
+    tables:
+      - name: customers
+        description: One row per synthetic customer.
+        config:
+          freshness:
+            warn_after: {count: 7, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: customer_id
+            description: Stable customer identifier.
+            data_tests: [unique, not_null]
+          - name: country_code
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['DE', 'AT', 'CH', 'NL', 'FR']
+          - name: acquisition_channel
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['organic', 'paid_search', 'referral', 'affiliate']
+
+      - name: products
+        description: One row per product in the synthetic catalogue.
+        config:
+          freshness:
+            warn_after: {count: 7, period: day}
+            error_after: {count: 14, period: day}
+        columns:
+          - name: product_id
+            data_tests: [unique, not_null]
+          - name: category
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['electronics', 'home', 'sports', 'books', 'beauty']
+
+      - name: orders
+        description: One row per customer order.
+        config: &transaction_freshness
+          freshness:
+            warn_after: {count: 12, period: hour}
+            error_after: {count: 24, period: hour}
+        columns:
+          - name: order_id
+            data_tests: [unique, not_null]
+          - name: customer_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('ecommerce', 'customers')
+                    field: customer_id
+          - name: order_status
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['pending', 'paid', 'completed', 'cancelled']
+          - name: sales_channel
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['web', 'mobile', 'marketplace']
+          - name: currency
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['EUR']
+
+      - name: order_items
+        description: One row per product line within an order.
+        config: *transaction_freshness
+        columns:
+          - name: order_item_id
+            data_tests: [unique, not_null]
+          - name: order_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('ecommerce', 'orders')
+                    field: order_id
+          - name: product_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('ecommerce', 'products')
+                    field: product_id
+          - name: quantity
+            data_tests:
+              - non_negative
+          - name: unit_price
+            data_tests:
+              - non_negative
+          - name: discount_amount
+            data_tests:
+              - non_negative
+
+      - name: payments
+        description: One row per payment attempt; an order can have several attempts.
+        config: *transaction_freshness
+        columns:
+          - name: payment_id
+            data_tests: [unique, not_null]
+          - name: order_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('ecommerce', 'orders')
+                    field: order_id
+          - name: payment_status
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['pending', 'succeeded', 'failed']
+          - name: payment_method
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['card', 'paypal', 'bank_transfer']
+          - name: amount
+            data_tests:
+              - non_negative
+
+      - name: returns
+        description: One return event against an order item; order_item_id is intentionally non-unique.
+        config: *transaction_freshness
+        columns:
+          - name: return_id
+            data_tests: [unique, not_null]
+          - name: order_item_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('ecommerce', 'order_items')
+                    field: order_item_id
+          - name: return_quantity
+            data_tests:
+              - non_negative
+          - name: refund_amount
+            data_tests:
+              - non_negative
+          - name: return_reason
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['damaged', 'unwanted', 'wrong_item', 'defective', 'late_delivery']
+

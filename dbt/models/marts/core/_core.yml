@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: "Grain: one row per customer. Current customer dimension for analytics joins."
+    columns:
+      - name: customer_id
+        description: Customer dimension key.
+        data_tests: [unique, not_null]
+      - name: email
+        data_tests: [not_null]
+
+  - name: dim_products
+    description: "Grain: one row per product. Current product dimension for analytics joins."
+    columns:
+      - name: product_id
+        description: Product dimension key.
+        data_tests: [unique, not_null]
+      - name: sku
+        data_tests: [unique, not_null]
+      - name: list_price
+        data_tests: [non_negative]
+      - name: unit_cost
+        data_tests: [non_negative]
+
+  - name: fct_order_items
+    description: "Grain: one row per order item. Additive line-level commercial fact."
+    columns:
+      - name: order_item_id
+        description: Order-item fact key.
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: quantity
+        data_tests: [non_negative]
+      - name: returned_quantity
+        data_tests: [non_negative]
+      - name: gross_amount
+        data_tests: [non_negative]
+      - name: discount_amount
+        data_tests: [non_negative]
+      - name: net_sales
+        data_tests: [non_negative]
+      - name: refund_amount
+        data_tests: [non_negative]
+      - name: cost
+        data_tests: [non_negative]
+
+  - name: fct_orders
+    description: "Grain: one row per order. Incremental order fact updated for late payments and returns through source_updated_at."
+    columns:
+      - name: order_id
+        description: Order fact key and incremental unique key.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: source_updated_at
+        description: Watermark containing the latest upstream source change for the order.
+        data_tests: [not_null]
+      - name: gross_amount
+        data_tests: [non_negative]
+      - name: discount_amount
+        data_tests: [non_negative]
+      - name: net_sales
+        data_tests: [non_negative]
+      - name: refund_amount
+        data_tests: [non_negative]
+      - name: cost
+        data_tests: [non_negative]
+      - name: successful_paid_amount
+        data_tests: [non_negative]
+
