@@ -3,11 +3,11 @@ services:
     image: postgres:16-alpine
     container_name: ecommerce-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
-      POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce_local}
+      POSTGRES_DB: ${DB_NAME:-ecommerce}
+      POSTGRES_USER: ${DB_USER:-ecommerce}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ecommerce_local}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init:/docker-entrypoint-initdb.d:ro
@@ -21,4 +21,3 @@ services:
 
 volumes:
   postgres_data:
-

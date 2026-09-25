@@ -1,0 +1,77 @@
+version: 2
+
+models:
+  - name: ml_prediction_cutoffs
+    description: "Grain: one row per monthly prediction cutoff. Cutoffs start after 90 observable history days and end at least 30 days before the dataset observation boundary."
+    columns:
+      - name: prediction_cutoff_date
+        data_tests: [unique, not_null]
+      - name: observation_end_date
+        data_tests: [not_null]
+
+  - name: ml_customer_features
+    description: "Grain: one row per eligible customer and prediction cutoff. Features include only qualifying orders and events observable on or before the cutoff."
+    columns:
+      - name: customer_cutoff_key
+        description: Deterministic key representing customer_id plus prediction_cutoff_date.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: prediction_cutoff_date
+        data_tests: [not_null]
+      - name: customer_tenure_days
+        data_tests: [non_negative]
+      - name: days_since_last_order
+        data_tests: [non_negative]
+      - name: orders_last_30d
+        data_tests: [non_negative]
+      - name: orders_last_90d
+        data_tests: [non_negative]
+      - name: orders_lifetime_before_cutoff
+        data_tests: [non_negative]
+      - name: units_last_30d
+        data_tests: [non_negative]
+      - name: units_last_90d
+        data_tests: [non_negative]
+      - name: revenue_last_30d
+        data_tests: [non_negative]
+      - name: revenue_last_90d
+        data_tests: [non_negative]
+      - name: lifetime_revenue_before_cutoff
+        data_tests: [non_negative]
+      - name: avg_order_value_90d
+        data_tests: [non_negative]
+      - name: avg_order_value_lifetime
+        data_tests: [non_negative]
+      - name: discount_usage_rate_90d
+        data_tests: [non_negative]
+      - name: lifetime_discount_usage_rate
+        data_tests: [non_negative]
+      - name: returned_quantity_90d
+        data_tests: [non_negative]
+      - name: return_rate_90d
+        data_tests: [non_negative]
+      - name: successful_payment_rate_90d
+        data_tests: [non_negative]
+
+  - name: ml_customer_training_dataset
+    description: "Grain: one row per eligible customer and prediction cutoff, containing point-in-time features and the observed repeat-purchase label for the following 30 days."
+    columns:
+      - name: customer_cutoff_key
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests: [not_null]
+      - name: prediction_cutoff_date
+        data_tests: [not_null]
+      - name: repeat_purchase_30d
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+

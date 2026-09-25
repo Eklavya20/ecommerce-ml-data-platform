@@ -26,4 +26,6 @@ models:
       reporting:
         +materialized: table
         +schema: marts
-
+      ml:
+        +materialized: table
+        +schema: ml

@@ -12,6 +12,25 @@ dbt/target/
 dbt/logs/
 dbt/dbt_packages/
 
+ml/artifacts/*.json
+ml/artifacts/*.joblib
+
+# Terraform working data, plans, local state, and secret variable files.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
 *.log
 .DS_Store
 .idea/

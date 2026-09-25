@@ -33,6 +33,7 @@ select
     orders.sales_channel,
     orders.currency,
     orders.ordered_at,
+    orders.updated_at as order_updated_at,
     order_item_totals.order_line_count,
     order_item_totals.units,
     order_item_totals.returned_quantity,
@@ -56,4 +57,3 @@ select
 from orders
 inner join order_item_totals using (order_id)
 left join payments using (order_id)
-
