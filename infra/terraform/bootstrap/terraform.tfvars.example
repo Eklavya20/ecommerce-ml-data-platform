@@ -1,3 +1,4 @@
+# Example only. Use a region permitted by your AWS account or organization.
 aws_region                 = "eu-central-1"
 state_bucket_name          = "replace-with-a-globally-unique-state-bucket"
 state_bucket_force_destroy = false

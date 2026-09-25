@@ -37,6 +37,8 @@ RDS PostgreSQL -> existing raw initialization -> existing generator -> existing 
 
 Terraform owns only AWS resource lifecycle. It does not execute DDL, load source data, or create dbt relations. This boundary keeps infrastructure state separate from analytical lineage and lets `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` switch the same code between local and AWS targets.
 
+The deployment region is configurable. The default example is `eu-central-1`, but AWS Organizations or project policies can restrict which regions an account may use. End-to-end validation for this repository ran successfully in `eu-north-1`, including RDS initialization, dbt, and ML training; the development environment was destroyed afterward.
+
 ## Layer responsibilities
 
 - **Raw:** source-shaped records with database constraints, UTC timestamps, and load metadata.

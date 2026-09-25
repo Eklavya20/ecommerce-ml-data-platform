@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: dbt, ML, and Terraform regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: ecommerce
+      DB_USER: ecommerce
+      DB_PASSWORD: ecommerce_ci
+      DBT_SCHEMA: analytics
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: ecommerce
+      PGUSER: ecommerce
+      PGPASSWORD: ecommerce_ci
+      TF_IN_AUTOMATION: "true"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ecommerce
+          POSTGRES_USER: ecommerce
+          POSTGRES_PASSWORD: ecommerce_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ecommerce -d ecommerce"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Create dbt profile
+        run: cp dbt/profiles.yml.example dbt/profiles.yml
+
+      - name: Initialize raw PostgreSQL schema
+        run: psql -f docker/init/001_create_raw_schema.sql
+
+      - name: Generate deterministic ML fixture
+        run: python -m data_generator.generate_and_load --seed 42 --scale 20 --batch baseline
+
+      - name: Verify dbt connection
+        run: dbt debug --project-dir dbt --profiles-dir dbt
+
+      - name: Check source freshness
+        run: dbt source freshness --project-dir dbt --profiles-dir dbt
+
+      - name: Build and test dbt project
+        run: dbt build --full-refresh --project-dir dbt --profiles-dir dbt
+
+      - name: Train models and verify deterministic metrics
+        shell: bash
+        run: |
+          python -m ml.train
+          first_hash="$(sha256sum ml/artifacts/metrics.json | cut -d ' ' -f 1)"
+          python -m ml.train
+          second_hash="$(sha256sum ml/artifacts/metrics.json | cut -d ' ' -f 1)"
+          test "$first_hash" = "$second_hash"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+
+      - name: Check Terraform formatting
+        run: terraform fmt -recursive -check infra/terraform
+
+      - name: Validate Terraform bootstrap
+        run: |
+          terraform -chdir=infra/terraform/bootstrap init -backend=false -reconfigure -input=false
+          terraform -chdir=infra/terraform/bootstrap validate
+
+      - name: Validate Terraform development environment
+        run: |
+          terraform -chdir=infra/terraform/environments/dev init -backend=false -reconfigure -input=false
+          terraform -chdir=infra/terraform/environments/dev validate

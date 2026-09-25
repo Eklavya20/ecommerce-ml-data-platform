@@ -14,6 +14,8 @@ RDS is publicly reachable solely so dbt and Python can run from a developer work
 
 No NAT gateway, load balancer, compute service, or orchestration platform is created.
 
+The deployment region is configurable through `aws_region`; `eu-central-1` is an example default only. AWS Organizations or project policies may restrict allowed regions. This repository was successfully validated in `eu-north-1`, including raw-data loading, dbt build, and ML training. The validation RDS environment was destroyed afterward.
+
 ## Initialize remote state
 
 Create the bootstrap bucket first. Then run from this directory, substituting the bucket output:
@@ -21,11 +23,14 @@ Create the bootstrap bucket first. Then run from this directory, substituting th
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 # Set allowed_cidr to your current public IPv4/32.
+# Set aws_region to a region permitted by your AWS account.
 # Leave db_password commented and use TF_VAR_db_password when possible.
+
+export AWS_REGION="YOUR_AWS_REGION"
 
 terraform init \
   -backend-config="bucket=YOUR_STATE_BUCKET" \
-  -backend-config="region=eu-central-1"
+  -backend-config="region=$AWS_REGION"
 terraform fmt -check
 terraform validate
 terraform plan -out=dev.tfplan

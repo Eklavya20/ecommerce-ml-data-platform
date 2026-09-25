@@ -10,6 +10,8 @@ This independent Terraform root creates the S3 bucket used by the development en
 
 Never place AWS credentials in Terraform files or committed variable files.
 
+`aws_region` is configurable. The example uses `eu-central-1`, but AWS Organizations or project policies may allow only specific regions. Use a region permitted by your account. This repository's end-to-end AWS validation used `eu-north-1`.
+
 ## Create the backend bucket
 
 ```bash
